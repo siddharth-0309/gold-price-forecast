@@ -129,9 +129,13 @@ def fetch_usd_inr_rate():
     return float(rate.iloc[-1])
 
 
-def usd_oz_to_inr_10g(usd_price, usd_inr_rate):
+def usd_oz_to_inr_10g(usd_price, usd_inr_rate, include_premium=False):
     # 1 troy ounce = 31.1035 grams; result is INR per 10 grams
-    return (usd_price / 31.1035) * usd_inr_rate * 10
+    spot_inr = (usd_price / 31.1035) * usd_inr_rate * 10
+    if include_premium:
+        # Approx Indian retail premium: ~6% import duty + ~3% GST + ~2-3% dealer margin
+        return spot_inr * 1.11
+    return spot_inr
 
 
 def build_features(combined):
@@ -170,15 +174,15 @@ try:
 
     def fmt_price(usd_value):
         if is_inr:
-            return f"₹{usd_oz_to_inr_10g(usd_value, usd_inr_rate):,.0f}"
+            return f"₹{usd_oz_to_inr_10g(usd_value, usd_inr_rate, include_premium=True):,.0f}"
         return f"${usd_value:,.0f}"
 
     def fmt_price_precise(usd_value):
         if is_inr:
-            return f"₹{usd_oz_to_inr_10g(usd_value, usd_inr_rate):,.0f}"
+            return f"₹{usd_oz_to_inr_10g(usd_value, usd_inr_rate, include_premium=True):,.0f}"
         return f"${usd_value:,.2f}"
 
-    price_label = "Current Gold Price (INR / 10 grams)" if is_inr else "Current Gold Price (USD / troy oz)"
+    price_label = "Est. Indian Retail Price (INR / 10g, incl. duty + GST)" if is_inr else "Current Gold Price (USD / troy oz)"
 
     # ---------- Current Price Card ----------
     st.markdown(f"""
@@ -190,7 +194,8 @@ try:
     """, unsafe_allow_html=True)
 
     if is_inr:
-        st.caption("💡 This is the international spot-price equivalent. Local jewellery/retail rates in India are usually higher due to import duty, GST, and dealer premium.")
+        spot_only = usd_oz_to_inr_10g(current_price, usd_inr_rate, include_premium=False)
+        st.caption(f"💡 International spot equivalent: ₹{spot_only:,.0f} per 10g. Retail estimate above adds ~11% for import duty, GST, and dealer premium — actual shop prices may vary by city and jeweller.")
 
     # ---------- Forecast Cards ----------
     horizon_map = [('day1', 'Tomorrow'), ('day2', 'In 2 Days'), ('day3', 'In 3 Days')]
