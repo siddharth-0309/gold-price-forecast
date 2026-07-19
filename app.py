@@ -56,8 +56,8 @@ try:
 
     for horizon, label in [('day1', 'Tomorrow'), ('day2', 'In 2 Days'), ('day3', 'In 3 Days')]:
        q_low = models[f'{horizon}_q10'].predict(X_latest)[0]
-q_mid = models[f'{horizon}_q50'].predict(X_latest)[0]
-q_high = models[f'{horizon}_q90'].predict(X_latest)[0]
+       q_mid = models[f'{horizon}_q50'].predict(X_latest)[0]
+       q_high = models[f'{horizon}_q90'].predict(X_latest)[0]
 
         low_price = current_price * (1 + q_low)
         mid_price = current_price * (1 + q_mid)
