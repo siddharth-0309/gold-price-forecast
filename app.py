@@ -123,6 +123,17 @@ def fetch_latest_data():
     return combined
 
 
+@st.cache_data(ttl=3600)
+def fetch_usd_inr_rate():
+    rate = yf.Ticker('INR=X').history(period='5d')['Close']
+    return float(rate.iloc[-1])
+
+
+def usd_oz_to_inr_10g(usd_price, usd_inr_rate):
+    # 1 troy ounce = 31.1035 grams; result is INR per 10 grams
+    return (usd_price / 31.1035) * usd_inr_rate * 10
+
+
 def build_features(combined):
     df = combined.copy()
     for lag in [1, 3, 5, 7]:
@@ -141,20 +152,45 @@ try:
     models, feature_cols = load_models()
     combined = fetch_latest_data()
     df_features = build_features(combined)
+    usd_inr_rate = fetch_usd_inr_rate()
 
     latest_row = df_features.iloc[[-1]]
     current_price = latest_row['current_gold_price'].values[0]
     X_latest = latest_row[feature_cols]
     latest_date = latest_row.index[0].strftime('%d %b %Y')
 
+    # ---------- Currency Toggle ----------
+    currency = st.radio(
+        "Currency",
+        options=["USD (per troy oz)", "INR (per 10 grams)"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    is_inr = currency.startswith("INR")
+
+    def fmt_price(usd_value):
+        if is_inr:
+            return f"₹{usd_oz_to_inr_10g(usd_value, usd_inr_rate):,.0f}"
+        return f"${usd_value:,.0f}"
+
+    def fmt_price_precise(usd_value):
+        if is_inr:
+            return f"₹{usd_oz_to_inr_10g(usd_value, usd_inr_rate):,.0f}"
+        return f"${usd_value:,.2f}"
+
+    price_label = "Current Gold Price (INR / 10 grams)" if is_inr else "Current Gold Price (USD / troy oz)"
+
     # ---------- Current Price Card ----------
     st.markdown(f"""
     <div class="price-card">
-        <div class="price-label">Current Gold Price (USD / troy oz)</div>
-        <div class="price-value">${current_price:,.2f}</div>
-        <div class="price-date">As of {latest_date}</div>
+        <div class="price-label">{price_label}</div>
+        <div class="price-value">{fmt_price_precise(current_price)}</div>
+        <div class="price-date">As of {latest_date}{' · 1 USD = ₹' + format(usd_inr_rate, ',.2f') if is_inr else ''}</div>
     </div>
     """, unsafe_allow_html=True)
+
+    if is_inr:
+        st.caption("💡 This is the international spot-price equivalent. Local jewellery/retail rates in India are usually higher due to import duty, GST, and dealer premium.")
 
     # ---------- Forecast Cards ----------
     horizon_map = [('day1', 'Tomorrow'), ('day2', 'In 2 Days'), ('day3', 'In 3 Days')]
@@ -174,15 +210,15 @@ try:
             <div class="metric-row">
                 <div class="metric-box">
                     <div class="metric-label">Low</div>
-                    <div class="metric-value low-val">${low_price:,.0f}</div>
+                    <div class="metric-value low-val">{fmt_price(low_price)}</div>
                 </div>
                 <div class="metric-box">
                     <div class="metric-label">Expected</div>
-                    <div class="metric-value mid-val">${mid_price:,.0f}</div>
+                    <div class="metric-value mid-val">{fmt_price(mid_price)}</div>
                 </div>
                 <div class="metric-box">
                     <div class="metric-label">High</div>
-                    <div class="metric-value high-val">${high_price:,.0f}</div>
+                    <div class="metric-value high-val">{fmt_price(high_price)}</div>
                 </div>
             </div>
         </div>
